@@ -61,8 +61,9 @@ struct ClipboardListView: View {
                         ClipboardItemRow(
                             item: item,
                             onTap: {
+                                manager.keyboardSelectedIndex = index
                                 manager.writeToPasteboard(item)
-                                NSApp.hide(nil)
+                                AppDelegate.shared?.showCopiedToast()
                             },
                             onDelete: {
                                 manager.deleteItem(item)

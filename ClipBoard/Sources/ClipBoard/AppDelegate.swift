@@ -214,16 +214,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 return nil
 
-            case 36: // Enter/Return
-                let index = self.clipboardManager.keyboardSelectedIndex
-                if index < self.clipboardManager.items.count {
-                    let item = self.clipboardManager.items[index]
-                    self.clipboardManager.writeToPasteboard(item)
-                    self.popover.performClose(nil)
-                    self.removeEventMonitor()
-                    NSApp.hide(nil)
-                }
-                return nil
+                case 36: // Enter/Return
+                    let index = self.clipboardManager.keyboardSelectedIndex
+                    if index < self.clipboardManager.items.count {
+                        let item = self.clipboardManager.items[index]
+                        self.clipboardManager.writeToPasteboard(item)
+                        self.showCopiedToast()
+                    }
+                    return nil
 
             case 53: // Escape
                 self.popover.performClose(nil)
@@ -244,14 +242,84 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - 复制成功提示
+
+    /// 关闭弹出面板
+    func closePopover() {
+        popover.performClose(nil)
+        removeEventMonitor()
+    }
+
+    /// 在屏幕中央显示"已复制"浮层提示
+    func showCopiedToast() {
+        let width: CGFloat = 140
+        let height: CGFloat = 44
+
+        let toastWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        toastWindow.isOpaque = false
+        toastWindow.backgroundColor = .clear
+        toastWindow.level = .floating
+        toastWindow.ignoresMouseEvents = true
+        toastWindow.isReleasedWhenClosed = false
+
+        // 使用 SwiftUI 视图，确保内容和背景完美居中
+        let toastView = NSHostingView(rootView: CopiedToastView())
+        toastView.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        toastWindow.contentView = toastView
+
+        // 定位到屏幕正中央
+        if let screen = NSScreen.main {
+            let screenFrame = screen.frame
+            toastWindow.setFrameOrigin(NSPoint(
+                x: screenFrame.midX - width / 2,
+                y: screenFrame.midY - height / 2
+            ))
+        }
+
+        toastWindow.orderFrontRegardless()
+
+        // 0.8s 后淡出消失
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.15
+                toastWindow.animator().alphaValue = 0
+            } completionHandler: {
+                Task { @MainActor in
+                    toastWindow.close()
+                }
+            }
+        }
+    }
+
     private func pasteItem(at index: Int) {
         guard index < clipboardManager.items.count else { return }
         let item = clipboardManager.items[index]
         clipboardManager.writeToPasteboard(item)
+        showCopiedToast()
     }
 
     private func pinLatestImage() {
         guard let image = clipboardManager.latestImage else { return }
         pinManager.pin(image: image)
+    }
+}
+
+// MARK: - 复制成功提示浮层
+
+private struct CopiedToastView: View {
+    var body: some View {
+        Text("已复制 ✓")
+            .font(.system(size: 15, weight: .medium))
+            .foregroundColor(.primary)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 10)
+            .background(.regularMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
     }
 }
