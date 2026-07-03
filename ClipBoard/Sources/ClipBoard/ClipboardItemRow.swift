@@ -111,6 +111,12 @@ struct RowNSView: NSViewRepresentable {
         switch item.type {
         case .text: return item.content ?? ""
         case .image: return "图片"
+        case .richText: return item.content ?? "富文本"
+        case .fileURL: return item.metadata?["filename"] ?? item.content ?? "文件"
+        case .color: return item.metadata?["hex"] ?? item.content ?? "颜色"
+        case .link: return item.metadata?["url"] ?? item.content ?? "链接"
+        case .code: return item.metadata?["firstLine"] ?? item.content ?? "代码"
+        case .contact: return item.metadata?["name"] ?? "联系人"
         }
     }
 

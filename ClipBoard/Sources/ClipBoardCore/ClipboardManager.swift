@@ -68,6 +68,10 @@ public class ClipboardManager: ObservableObject {
                let image = loadImage(fileName: fileName) {
                 pasteboard.writeObjects([image])
             }
+        case .richText, .fileURL, .color, .link, .code, .contact:
+            if let content = item.content {
+                pasteboard.setString(content, forType: .string)
+            }
         }
         suppressNextChange = true
     }
