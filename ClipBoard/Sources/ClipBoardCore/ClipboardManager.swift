@@ -68,7 +68,7 @@ public class ClipboardManager: ObservableObject {
                let image = loadImage(fileName: fileName) {
                 pasteboard.writeObjects([image])
             }
-        case .richText, .fileURL, .color, .link, .code, .contact:
+        case .richText, .fileURL, .link, .code, .contact:
             if let content = item.content {
                 pasteboard.setString(content, forType: .string)
             }
@@ -140,23 +140,7 @@ public class ClipboardManager: ObservableObject {
             }
         }
 
-        // 2. 颜色检测 (P0)
-        if availableTypes.contains(.color) {
-            if let color = NSColor(from: pasteboard) {
-                var hex = "#"
-                if let srgb = color.usingColorSpace(.sRGB) {
-                    let r = Int(srgb.redComponent * 255)
-                    let g = Int(srgb.greenComponent * 255)
-                    let b = Int(srgb.blueComponent * 255)
-                    hex += String(format: "%02X%02X%02X", r, g, b)
-                }
-                let metadata = ["hex": hex]
-                addItem(ClipboardItem(type: .color, content: hex, metadata: metadata))
-                return
-            }
-        }
-
-        // 4. 富文本检测 (P0)
+        // 3. 富文本检测 (P0)
         if availableTypes.contains(.rtf) {
             if let rtfData = pasteboard.data(forType: .rtf) {
                 if let plainText = NSAttributedString(rtf: rtfData, documentAttributes: nil)?.string {
@@ -187,11 +171,8 @@ public class ClipboardManager: ObservableObject {
         // 6. 联系人检测 (P2)
         if #available(macOS 14.0, *) {
             if availableTypes.contains(.vCard) {
-                if let vCardData = pasteboard.data(forType: .vCard) {
-                    // 简化为检测到 vCard 类型就存储
-                    addItem(ClipboardItem(type: .contact, content: "联系人", metadata: nil))
-                    return
-                }
+                addItem(ClipboardItem(type: .contact, content: "联系人", metadata: nil))
+                return
             }
         }
     }

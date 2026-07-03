@@ -71,22 +71,6 @@ struct RowNSView: NSViewRepresentable {
             imgView.image = NSImage(systemSymbolName: "doc", accessibilityDescription: nil)
             imgView.contentTintColor = .secondaryLabelColor
             view.addSubview(imgView)
-        case .color:
-            if let hex = item.metadata?["hex"], let color = NSColor(hex: hex) {
-                let colorView = NSView(frame: NSRect(x: 12, y: 8, width: 36, height: 36))
-                colorView.wantsLayer = true
-                colorView.layer?.backgroundColor = color.cgColor
-                colorView.layer?.cornerRadius = 18
-                colorView.layer?.borderWidth = 1
-                colorView.layer?.borderColor = NSColor.secondaryLabelColor.withAlphaComponent(0.3).cgColor
-                view.addSubview(colorView)
-            } else {
-                let imgView = NSImageView()
-                imgView.frame = NSRect(x: 12, y: 8, width: 36, height: 36)
-                imgView.image = NSImage(systemSymbolName: "square.filled", accessibilityDescription: nil)
-                imgView.contentTintColor = .secondaryLabelColor
-                view.addSubview(imgView)
-            }
         case .link:
             let imgView = NSImageView()
             imgView.frame = NSRect(x: 12, y: 8, width: 36, height: 36)
@@ -160,7 +144,6 @@ struct RowNSView: NSViewRepresentable {
         case .image: return "图片"
         case .richText: return item.content ?? "富文本"
         case .fileURL: return item.metadata?["filename"] ?? item.content ?? "文件"
-        case .color: return item.metadata?["hex"] ?? item.content ?? "颜色"
         case .link:
             if let url = item.metadata?["url"] {
                 return url
@@ -221,45 +204,5 @@ final class InteractiveRowView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         coordinator?.onTap()
-    }
-}
-
-// MARK: - Color hex init
-
-extension Color {
-    init?(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let r, g, b: Double
-        switch hex.count {
-        case 3: // RGB (12-bit)
-            (r, g, b) = (Double((int >> 8) & 0xF) / 15.0, Double((int >> 4) & 0xF) / 15.0, Double(int & 0xF) / 15.0)
-        case 6: // RGB (24-bit)
-            (r, g, b) = (Double((int >> 16) & 0xFF) / 255.0, Double((int >> 8) & 0xFF) / 255.0, Double(int & 0xFF) / 255.0)
-        default:
-            return nil
-        }
-        self.init(.sRGB, red: r, green: g, blue: b, opacity: 1)
-    }
-}
-
-// MARK: - NSColor hex init
-
-extension NSColor {
-    convenience init?(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let r, g, b: Double
-        switch hex.count {
-        case 3: // RGB (12-bit)
-            (r, g, b) = (Double((int >> 8) & 0xF) / 15.0, Double((int >> 4) & 0xF) / 15.0, Double(int & 0xF) / 15.0)
-        case 6: // RGB (24-bit)
-            (r, g, b) = (Double((int >> 16) & 0xFF) / 255.0, Double((int >> 8) & 0xFF) / 255.0, Double(int & 0xFF) / 255.0)
-        default:
-            return nil
-        }
-        self.init(red: r, green: g, blue: b, alpha: 1)
     }
 }

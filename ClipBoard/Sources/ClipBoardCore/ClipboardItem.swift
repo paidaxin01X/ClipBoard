@@ -5,7 +5,6 @@ public enum ItemType: String, Codable {
     case image
     case richText
     case fileURL
-    case color
     case link
     case code
     case contact
