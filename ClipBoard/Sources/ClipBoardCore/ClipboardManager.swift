@@ -117,7 +117,18 @@ public class ClipboardManager: ObservableObject {
 
         let availableTypes = pasteboard.types ?? []
 
-        // 1. 图片检测 (优先级最高)
+        // 1. 文件 URL 检测 (最高优先级 — 从 Finder 复制文件时也附带图片缩略图)
+        if availableTypes.contains(.fileContents) || availableTypes.contains(NSPasteboard.PasteboardType("NSFilenamesPboardType")) {
+            if let urlStr = pasteboard.string(forType: .fileURL) {
+                let url = URL(string: urlStr)
+                let path = url?.path ?? urlStr
+                let filename = url?.lastPathComponent ?? path
+                addItem(ClipboardItem(type: .fileURL, content: path, metadata: ["path": path, "filename": filename]))
+                return
+            }
+        }
+
+        // 2. 图片检测
         let hasImage = availableTypes.contains(where: { $0 == .tiff || $0 == .png })
         if hasImage {
             if let image = NSImage(pasteboard: pasteboard) {
@@ -141,18 +152,6 @@ public class ClipboardManager: ObservableObject {
                 }
                 let metadata = ["hex": hex]
                 addItem(ClipboardItem(type: .color, content: hex, metadata: metadata))
-                return
-            }
-        }
-
-        // 3. 文件 URL 检测 (P0)
-        if availableTypes.contains(.fileContents) || availableTypes.contains(NSPasteboard.PasteboardType("NSFilenamesPboardType")) {
-            // 通过 string(forType:) 读取文件 URL
-            if let urlStr = pasteboard.string(forType: .fileURL) {
-                let url = URL(string: urlStr)
-                let path = url?.path ?? urlStr
-                let filename = url?.lastPathComponent ?? path
-                addItem(ClipboardItem(type: .fileURL, content: path, metadata: ["path": path, "filename": filename]))
                 return
             }
         }
