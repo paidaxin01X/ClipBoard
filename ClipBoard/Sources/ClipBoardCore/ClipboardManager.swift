@@ -146,14 +146,8 @@ public class ClipboardManager: ObservableObject {
         }
 
         // 3. 文件 URL 检测 (P0)
-        if availableTypes.contains(.fileContents) || availableTypes.contains( NSPasteboard.PasteboardType("NSFilenamesPboardType") ) {
-            if let paths = pasteboard.propertyList(forType: .fileURL) as? [String], let firstPath = paths.first {
-                let url = URL(fileURLWithPath: firstPath)
-                let filename = url.lastPathComponent
-                addItem(ClipboardItem(type: .fileURL, content: firstPath, metadata: ["path": firstPath, "filename": filename]))
-                return
-            }
-            // 另一种读取方式
+        if availableTypes.contains(.fileContents) || availableTypes.contains(NSPasteboard.PasteboardType("NSFilenamesPboardType")) {
+            // 通过 string(forType:) 读取文件 URL
             if let urlStr = pasteboard.string(forType: .fileURL) {
                 let url = URL(string: urlStr)
                 let path = url?.path ?? urlStr
