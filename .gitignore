@@ -1,0 +1,11 @@
+.build/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+*.app/
+.DS_Store
+.firecrawl/
+.superpowers/
+docs/
+AGENTS.md
