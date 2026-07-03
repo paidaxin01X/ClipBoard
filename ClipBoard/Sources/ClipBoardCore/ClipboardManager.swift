@@ -115,14 +115,11 @@ public class ClipboardManager: ObservableObject {
         guard currentChangeCount != lastChangeCount else { return }
         lastChangeCount = currentChangeCount
 
-        // 根据剪贴板中的实际类型决定检测顺序
         let availableTypes = pasteboard.types ?? []
-        let hasImage = availableTypes.contains(where: {
-            $0 == .tiff || $0 == .png
-        })
 
+        // 1. 图片检测 (优先级最高)
+        let hasImage = availableTypes.contains(where: { $0 == .tiff || $0 == .png })
         if hasImage {
-            // 有图片类型 → 优先存为图片
             if let image = NSImage(pasteboard: pasteboard) {
                 let fileName = "\(UUID().uuidString).png"
                 if saveImage(image, fileName: fileName) {
@@ -132,10 +129,123 @@ public class ClipboardManager: ObservableObject {
             }
         }
 
-        // 没有图片或图片解析失败 → 检查文本
-        if let text = pasteboard.string(forType: .string), !text.isEmpty {
-            addItem(ClipboardItem(text: text))
+        // 2. 颜色检测 (P0)
+        if availableTypes.contains(.color) {
+            if let color = NSColor(from: pasteboard) {
+                var hex = "#"
+                if let srgb = color.usingColorSpace(.sRGB) {
+                    let r = Int(srgb.redComponent * 255)
+                    let g = Int(srgb.greenComponent * 255)
+                    let b = Int(srgb.blueComponent * 255)
+                    hex += String(format: "%02X%02X%02X", r, g, b)
+                }
+                let metadata = ["hex": hex]
+                addItem(ClipboardItem(type: .color, content: hex, metadata: metadata))
+                return
+            }
         }
+
+        // 3. 文件 URL 检测 (P0)
+        if availableTypes.contains(.fileContents) || availableTypes.contains( NSPasteboard.PasteboardType("NSFilenamesPboardType") ) {
+            if let paths = pasteboard.propertyList(forType: .fileURL) as? [String], let firstPath = paths.first {
+                let url = URL(fileURLWithPath: firstPath)
+                let filename = url.lastPathComponent
+                addItem(ClipboardItem(type: .fileURL, content: firstPath, metadata: ["path": firstPath, "filename": filename]))
+                return
+            }
+            // 另一种读取方式
+            if let urlStr = pasteboard.string(forType: .fileURL) {
+                let url = URL(string: urlStr)
+                let path = url?.path ?? urlStr
+                let filename = url?.lastPathComponent ?? path
+                addItem(ClipboardItem(type: .fileURL, content: path, metadata: ["path": path, "filename": filename]))
+                return
+            }
+        }
+
+        // 4. 富文本检测 (P0)
+        if availableTypes.contains(.rtf) {
+            if let rtfData = pasteboard.data(forType: .rtf) {
+                if let plainText = NSAttributedString(rtf: rtfData, documentAttributes: nil)?.string {
+                    addItem(ClipboardItem(type: .richText, content: plainText))
+                    return
+                }
+            }
+        }
+
+        // 5. 纯文本检测 (已有逻辑 + P1 扩展)
+        if let text = pasteboard.string(forType: .string), !text.isEmpty {
+            // P1: URL 检测
+            if let url = detectURL(in: text) {
+                addItem(ClipboardItem(type: .link, content: text, metadata: ["url": url]))
+                return
+            }
+            // P1: 代码检测
+            if let language = detectCodeLanguage(in: text) {
+                let firstLine = text.components(separatedBy: "\n").first ?? text
+                addItem(ClipboardItem(type: .code, content: text, metadata: ["language": language, "firstLine": firstLine]))
+                return
+            }
+            // 默认纯文本
+            addItem(ClipboardItem(text: text))
+            return
+        }
+
+        // 6. 联系人检测 (P2)
+        if #available(macOS 14.0, *) {
+            if availableTypes.contains(.vCard) {
+                if let vCardData = pasteboard.data(forType: .vCard) {
+                    // 简化为检测到 vCard 类型就存储
+                    addItem(ClipboardItem(type: .contact, content: "联系人", metadata: nil))
+                    return
+                }
+            }
+        }
+    }
+
+    // MARK: - 文本智能检测 (P1)
+
+    /// 检测文本是否为 URL
+    private func detectURL(in text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
+        let matches = detector.matches(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed))
+        return matches.first?.url?.absoluteString
+    }
+
+    /// 检测文本是否为代码片段，返回语言名称 (nil 表示不是代码)
+    private func detectCodeLanguage(in text: String) -> String? {
+        let lines = text.components(separatedBy: "\n")
+        guard lines.count > 1 else { return nil }  // 至少 2 行才可能是代码
+
+        let totalLength = text.count
+        guard totalLength > 40 else { return nil } // 太短不判断
+
+        let joined = text
+
+        // 语言特征关键词
+        let languagePatterns: [(String, [String])] = [
+            ("swift", ["import ", "func ", "var ", "let ", "class ", "struct ", "enum ", "protocol ", "extension "]),
+            ("python", ["import ", "from ", "def ", "class ", "print(", "if __name__", "self."]),
+            ("javascript", ["function ", "const ", "let ", "var ", "=>", "import ", "export ", "console."]),
+            ("typescript", [": string", ": number", ": void", "interface ", "type ", "as const"]),
+            ("java", ["public class", "private ", "protected ", "import java.", "@Override"]),
+            ("go", ["package ", "func ", "import (", "defer ", "go "]),
+            ("rust", ["fn ", "let mut", "impl ", "pub ", "use std::"]),
+            ("cpp", ["#include", "using namespace", "int main", "std::", "->"]),
+            ("shell", ["#!/bin", "export ", "echo ", "$HOME", "chmod "]),
+            ("html", ["<!DOCTYPE", "<html", "<div", "<script", "<style"]),
+            ("css", ["{", ":", ";", "}"]), // 仅当有较多大括号和分号
+        ]
+
+        for (lang, patterns) in languagePatterns {
+            let matchCount = patterns.filter { joined.contains($0) }.count
+            if matchCount >= 2 {
+                return lang
+            }
+        }
+
+        return nil
     }
 
     // MARK: - 持久化（文本/元数据 → UserDefaults）
