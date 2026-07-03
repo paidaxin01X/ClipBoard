@@ -40,7 +40,14 @@ struct RowNSView: NSViewRepresentable {
         view.wantsLayer = true
 
         // 图标
-        if item.type == .image {
+        switch item.type {
+        case .text:
+            let imgView = NSImageView()
+            imgView.frame = NSRect(x: 12, y: 8, width: 36, height: 36)
+            imgView.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)
+            imgView.contentTintColor = .secondaryLabelColor
+            view.addSubview(imgView)
+        case .image:
             let imgView = NSImageView()
             imgView.frame = NSRect(x: 12, y: 8, width: 36, height: 36)
             imgView.imageScaling = .scaleAxesIndependently
@@ -52,10 +59,50 @@ struct RowNSView: NSViewRepresentable {
                 imgView.image = NSImage(contentsOf: url)
             }
             view.addSubview(imgView)
-        } else {
+        case .richText:
             let imgView = NSImageView()
             imgView.frame = NSRect(x: 12, y: 8, width: 36, height: 36)
-            imgView.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)
+            imgView.image = NSImage(systemSymbolName: "doc.richtext", accessibilityDescription: nil)
+            imgView.contentTintColor = .secondaryLabelColor
+            view.addSubview(imgView)
+        case .fileURL:
+            let imgView = NSImageView()
+            imgView.frame = NSRect(x: 12, y: 8, width: 36, height: 36)
+            imgView.image = NSImage(systemSymbolName: "doc", accessibilityDescription: nil)
+            imgView.contentTintColor = .secondaryLabelColor
+            view.addSubview(imgView)
+        case .color:
+            if let hex = item.metadata?["hex"], let color = NSColor(hex: hex) {
+                let colorView = NSView(frame: NSRect(x: 12, y: 8, width: 36, height: 36))
+                colorView.wantsLayer = true
+                colorView.layer?.backgroundColor = color.cgColor
+                colorView.layer?.cornerRadius = 18
+                colorView.layer?.borderWidth = 1
+                colorView.layer?.borderColor = NSColor.secondaryLabelColor.withAlphaComponent(0.3).cgColor
+                view.addSubview(colorView)
+            } else {
+                let imgView = NSImageView()
+                imgView.frame = NSRect(x: 12, y: 8, width: 36, height: 36)
+                imgView.image = NSImage(systemSymbolName: "square.filled", accessibilityDescription: nil)
+                imgView.contentTintColor = .secondaryLabelColor
+                view.addSubview(imgView)
+            }
+        case .link:
+            let imgView = NSImageView()
+            imgView.frame = NSRect(x: 12, y: 8, width: 36, height: 36)
+            imgView.image = NSImage(systemSymbolName: "link", accessibilityDescription: nil)
+            imgView.contentTintColor = .secondaryLabelColor
+            view.addSubview(imgView)
+        case .code:
+            let imgView = NSImageView()
+            imgView.frame = NSRect(x: 12, y: 8, width: 36, height: 36)
+            imgView.image = NSImage(systemSymbolName: "chevron.left.forwardslash.chevron.right", accessibilityDescription: nil)
+            imgView.contentTintColor = .secondaryLabelColor
+            view.addSubview(imgView)
+        case .contact:
+            let imgView = NSImageView()
+            imgView.frame = NSRect(x: 12, y: 8, width: 36, height: 36)
+            imgView.image = NSImage(systemSymbolName: "person.crop.square", accessibilityDescription: nil)
             imgView.contentTintColor = .secondaryLabelColor
             view.addSubview(imgView)
         }
@@ -114,8 +161,16 @@ struct RowNSView: NSViewRepresentable {
         case .richText: return item.content ?? "富文本"
         case .fileURL: return item.metadata?["filename"] ?? item.content ?? "文件"
         case .color: return item.metadata?["hex"] ?? item.content ?? "颜色"
-        case .link: return item.metadata?["url"] ?? item.content ?? "链接"
-        case .code: return item.metadata?["firstLine"] ?? item.content ?? "代码"
+        case .link:
+            if let url = item.metadata?["url"] {
+                return url
+            }
+            return item.content ?? "链接"
+        case .code:
+            if let lang = item.metadata?["language"], let firstLine = item.metadata?["firstLine"] {
+                return "\(firstLine)  — \(lang)"
+            }
+            return item.content ?? "代码"
         case .contact: return item.metadata?["name"] ?? "联系人"
         }
     }
@@ -166,5 +221,45 @@ final class InteractiveRowView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         coordinator?.onTap()
+    }
+}
+
+// MARK: - Color hex init
+
+extension Color {
+    init?(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let r, g, b: Double
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (r, g, b) = (Double((int >> 8) & 0xF) / 15.0, Double((int >> 4) & 0xF) / 15.0, Double(int & 0xF) / 15.0)
+        case 6: // RGB (24-bit)
+            (r, g, b) = (Double((int >> 16) & 0xFF) / 255.0, Double((int >> 8) & 0xFF) / 255.0, Double(int & 0xFF) / 255.0)
+        default:
+            return nil
+        }
+        self.init(.sRGB, red: r, green: g, blue: b, opacity: 1)
+    }
+}
+
+// MARK: - NSColor hex init
+
+extension NSColor {
+    convenience init?(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let r, g, b: Double
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (r, g, b) = (Double((int >> 8) & 0xF) / 15.0, Double((int >> 4) & 0xF) / 15.0, Double(int & 0xF) / 15.0)
+        case 6: // RGB (24-bit)
+            (r, g, b) = (Double((int >> 16) & 0xFF) / 255.0, Double((int >> 8) & 0xFF) / 255.0, Double(int & 0xFF) / 255.0)
+        default:
+            return nil
+        }
+        self.init(red: r, green: g, blue: b, alpha: 1)
     }
 }
